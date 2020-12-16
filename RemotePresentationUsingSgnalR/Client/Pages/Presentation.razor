@@ -1,0 +1,114 @@
+﻿@page "/presentation"
+
+@using Microsoft.AspNetCore.SignalR.Client
+@using RemotePresentationUsingSgnalR.Shared
+
+@inject NavigationManager NavigationManager
+
+@implements IDisposable
+
+
+<h3>Presentation</h3>
+
+@if (isFullScreen)
+{
+    <div class="fullscreen">
+        <span href="#" class="close" @onclick="(() =>isFullScreen=false)"/>
+        <img src=@($"/src/img/{currentPage}.png") alt="slide-element" />
+        <h1 class="page-number">@currentPage</h1>
+    </div>
+}
+
+
+<div class="normalscreen">
+    <img src=@($"/src/img/{currentPage}.png") alt="slide-element" class="img-fluid"/>
+</div>
+
+@*<button @onclick="(() => Slide(-1))">prev</button>
+    <button @onclick="(() => Slide(1))">next</button>*@
+
+<div>
+    <ul id="messagesList">
+        @foreach (var message in messages)
+        {
+            <li>@message</li>
+        }
+    </ul>
+</div>
+
+@if (!isConn)
+{
+    <div style="position: fixed; right: 20px; bottom: 20px; text-align: center;">
+        <img src="@getQRCodeURI()" alt="Remote QR" class="img-thumbnail">
+        <h5>You can Remote Presentation!</h5>
+    </div>
+}
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private int currentPage = 1;
+    private const string QRAPIURI = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=";
+    @*Thanks for QRSERVER.com !*@
+
+    private HashIdentifier identifier;
+
+    private bool isConn = false;
+    private bool isFullScreen = false;
+
+    private string getRemoteURI()
+    {
+        var uriBuilder = new UriBuilder(NavigationManager.BaseUri);
+        return uriBuilder.ToString() + "remote?id=" + identifier.Hash;
+    }
+
+    private string getQRCodeURI()
+    {
+        return QRAPIURI + getRemoteURI();
+    }
+
+    private bool isHashMatch(string hash)
+    {
+        return (hash == identifier.Hash);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/SignalHub"))
+            .Build();
+        identifier = new HashIdentifier();
+
+        hubConnection.On<string, int>("ReceivePage", (hash, data) =>
+        {
+    @*전송받은 데이터를 화면에 출력해줌*@
+            if (isHashMatch(hash))
+            {
+                currentPage = data;
+                StateHasChanged();
+            }
+        });
+        hubConnection.On<string, bool>("ReceiveConnSignal", (hash, isConn) =>
+        {
+            if (isHashMatch(hash))
+            {
+                this.isConn = isConn;
+                StateHasChanged();
+            }
+        });
+        hubConnection.On<string, bool>("ReceiveFullScreenSignal", (hash, isFullScreen) =>
+        {
+            if (isHashMatch(hash))
+            {
+                this.isFullScreen = isFullScreen;
+                StateHasChanged();
+            }
+        });
+        await hubConnection.StartAsync();
+    }
+
+    public void Dispose()
+    {
+        _ = hubConnection.DisposeAsync();
+    }
+}

@@ -1,0 +1,157 @@
+﻿@page "/remote"
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.IO;
+
+@inject NavigationManager NavigationManager
+@inject HttpClient Http
+@implements IDisposable
+
+
+<h3>Remote</h3>
+
+<hr>
+
+@if (disconnected)
+{
+<div class="black-bg">
+    <h1>Disconnected.</h1>
+</div>
+}
+
+<div class="container align-center">
+    <h5>Type : dir</h5>
+    <div class="margin-bottom-12">
+        <div class="btn-group btn-group-lg" role="group">
+            <button @onclick="(() => SlideByDir(-1))" type="button" class="btn btn-secondary">Prev</button>
+            <button @onclick="(() => SlideByDir(1))" type="button" class="btn btn-secondary">Next</button>
+        </div>
+    </div>
+    <h5>Type : num</h5>
+    <div class="margin-bottom-12">
+        <div class="btn-group mr-2 btn-group-lg" role="group" aria-label="First group">
+            @for (int i = 1; i <= maxImg; i++)
+            {
+                int local_i = i;
+                <button type="button" class="btn btn-secondary" @onclick="(()=>SlideByNumber(local_i))">@i</button>
+            }
+        </div>
+    </div>
+</div>
+
+<h5>Max page number : @maxImg</h5>
+
+<hr />
+<div style="text-align:center">
+    <button type="button" class="btn btn-success" @onclick="(()=>SendFullscreenSignal(true))">Full Screen <span class="oi oi-fullscreen-enter" aria-hidden="true"></span></button>
+    <button type="button" class="btn btn-secondary" @onclick="(()=>SendFullscreenSignal(false))">Normal Screen <span class="oi oi-fullscreen-exit" aria-hidden="true"></span></button>
+</div>
+<hr />
+
+<div style="text-align:center;">
+    <button type="button" class="btn btn-danger" @onclick="SendDisconnectSiganl">Disconnect</button>
+</div>
+
+
+@code {
+    [Parameter]
+    public string Id { get; set; }
+
+    // blazor: get query parm from url
+    string GetQueryParm(string parmName)
+    {
+        var uriBuilder = new UriBuilder(NavigationManager.Uri);
+        var q = System.Web.HttpUtility.ParseQueryString(uriBuilder.Query);
+        return q[parmName] ?? "";
+    }
+
+    private HubConnection hubConnection;
+
+
+    private string userInput;
+    private string messageInput;
+    private int currentPage = 1;
+    private int maxImg = 0;
+    private bool disconnected = false;
+    private string Hash;
+
+    private string imgPath = "/src/img/";
+
+    protected override void OnInitialized()
+    {
+        this.Hash = GetQueryParm("id");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/SignalHub"))
+            .Build();
+
+        await hubConnection.StartAsync();
+
+        for (int i = 1; ; i++)
+        {
+            var response = await Http.GetAsync(imgPath + i.ToString() + ".png");
+            if (response.StatusCode.ToString() == "NotFound")
+            {
+                maxImg = i - 1;
+                break;
+            }
+        }
+        await hubConnection.SendAsync("SendConnectSignal", Hash, true);
+
+    }
+
+    Task Send() =>
+        @*메시지 전송*@
+        hubConnection.SendAsync("SendMessage", userInput, messageInput);
+    public bool IsConnected =>
+        @*연결이 되어있나 ?*@
+        hubConnection.State == HubConnectionState.Connected;
+
+    private void SendPage()
+    {
+        string path = $"{imgPath}{currentPage.ToString()}";
+        string testPath = maxImg.ToString();
+
+        hubConnection.SendAsync("SendPage", Hash, currentPage);
+    }
+    private void SendDisconnectSiganl()
+    {
+        SendFullscreenSignal(false);
+        hubConnection.SendAsync("SendConnectSignal", Hash, false);
+        this.disconnected = true;
+        _ = hubConnection.DisposeAsync();
+    }
+    private void SendFullscreenSignal(bool isFull) {
+        hubConnection.SendAsync("SendFullScreenSignal", Hash, isFull);
+    }
+
+    private void SlideByDir(int dir)
+    {
+        if (dir < 0)
+        {
+            _ = (--currentPage <= 0) ? (currentPage = maxImg) : currentPage;
+        }
+        else
+        {
+            _ = (++currentPage > maxImg) ? currentPage = 1 : currentPage;
+        }
+
+        SendPage();
+    }
+
+    private void SlideByNumber(int number)
+    {
+        currentPage = number;
+
+        SendPage();
+    }
+
+    public void Dispose()
+    {
+        SendDisconnectSiganl();
+        _ = hubConnection.DisposeAsync();
+    }
+
+}
