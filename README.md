@@ -1,9 +1,9 @@
-[![Build Status](https://travis-ci.com/Eurus-Holmes/leetcode-program.svg?branch=master)](https://travis-ci.com/Eurus-Holmes/leetcode-program)
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-
 # RemoteContrallablePresentation
 Remote Controllable Presentation using SignalR
 Just you capture QR Code. and Control your presentation by your device
+
+[![Build Status](https://travis-ci.com/Eurus-Holmes/leetcode-program.svg?branch=master)](https://travis-ci.com/Eurus-Holmes/leetcode-program)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 ## Using
 First. Upload your presentation imgs in "Cleint/wwwroot/src/img".
